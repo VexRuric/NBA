@@ -64,6 +64,8 @@ function adjustGroup(groupKeys, changedKey, newVal, current) {
   return next;
 }
 
+const maxGP = Math.max(...players.map(p => p.gp));
+
 function normalize(all, key) {
   const vals = all.map(p => {
     if (key === "bpg") return p.estimatedBPG ?? p.bpg;
@@ -74,13 +76,15 @@ function normalize(all, key) {
   return vals.map(v => v == null ? 0.5 : max === min ? 1 : (v - min) / (max - min));
 }
 
-function computeScores(all, w) {
+function computeScores(all, w, longevity) {
   const norms = {};
   statKeys.forEach(k => { norms[k] = normalize(all, k); });
   return all.map((p, i) => {
     let score = 0, total = 0;
     statKeys.forEach(k => { score += norms[k][i] * w[k]; total += w[k]; });
-    return { ...p, score: parseFloat((score / total * 100).toFixed(1)) };
+    let base = score / total * 100;
+    if (longevity) base = base * (0.5 + 0.5 * (p.gp / maxGP));
+    return { ...p, score: parseFloat(base.toFixed(1)) };
   }).sort((a, b) => b.score - a.score);
 }
 
@@ -177,9 +181,10 @@ export default function App() {
   const [showWeights, setShowWeights] = useState(true);
   const [showAccolades, setShowAccolades] = useState(true);
   const [showTextBox, setShowTextBox] = useState(false);
+  const [longevity, setLongevity] = useState(false);
   const textareaRef = useRef(null);
 
-  const ranked = computeScores(players, w);
+  const ranked = computeScores(players, w, longevity);
   const top15 = ranked.slice(0, 15);
   const bubble = ranked.slice(15);
   const listText = top15.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
@@ -257,6 +262,22 @@ export default function App() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Longevity Toggle */}
+        <div style={{ background:"#1a2535", borderRadius:12, marginBottom:12, padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#aab8cc" }}>⏳ Longevity</div>
+            <div style={{ fontSize:11, color:"#445566", marginTop:2 }}>
+              {longevity ? "Career length rewarded — more games = higher score" : "Equal games — pure per-game averages, career length ignored"}
+            </div>
+          </div>
+          <button
+            onClick={() => { setLongevity(v => !v); setSelected(null); }}
+            style={{ position:"relative", width:52, height:28, borderRadius:14, border:"none", cursor:"pointer", background: longevity ? "#4e9af1" : "#2a3545", transition:"background 0.2s", flexShrink:0 }}
+          >
+            <div style={{ position:"absolute", top:3, left: longevity ? 27 : 3, width:22, height:22, borderRadius:"50%", background:"#fff", transition:"left 0.2s" }} />
+          </button>
         </div>
 
         {/* Share Button */}
