@@ -27,18 +27,42 @@ const players = [
   { name: "David Robinson", gp: 987, ppg: 21.1, rpg: 10.6, apg: 2.5, bpg: 3.0, spg: 1.7, per: 26.18, ts: 57.9, playoffPPG: 20.9, rings: 2, mvp: 1, fmvp: 0, allStar: 10, allNBA: 4, dpoy: 1, estimatedBPG: null, notes: "5th highest career PER ever at 26.18. 3.0 BPG and 1.7 SPG are elite two-way numbers. 1 MVP, 1 DPOY, 2 rings, 10 All-Star selections. Criminally underrated." },
 ];
 
-const perfKeys = ["ppg","rpg","apg","bpg","spg","per","ts","playoffPPG","rings"];
-const accoladeKeys = ["mvp","fmvp","allStar","allNBA","dpoy"];
+const perfKeys = ["ppg","rpg","apg","bpg","spg","per","ts","playoffPPG"];
+const accoladeKeys = ["rings","mvp","fmvp","allNBA","allStar","dpoy"];
 const statKeys = [...perfKeys, ...accoladeKeys];
 
 const statLabels = {
-  ppg:"PPG", rpg:"RPG", apg:"APG", bpg:"BPG*", spg:"SPG*", per:"PER", ts:"TS%", playoffPPG:"Playoff PPG", rings:"🏆 Rings",
-  mvp:"MVP Awards", fmvp:"Finals MVPs", allStar:"All-Star Apps", allNBA:"All-NBA 1st Team", dpoy:"DPOY Awards"
+  ppg:"PPG", rpg:"RPG", apg:"APG", bpg:"BPG*", spg:"SPG*", per:"PER", ts:"TS%", playoffPPG:"Playoff PPG",
+  rings:"🏆 Rings", mvp:"MVP Awards", fmvp:"Finals MVPs", allStar:"All-Star Apps", allNBA:"All-NBA 1st Team", dpoy:"DPOY Awards"
 };
+// Each group must sum to 100
 const defaultWeights = {
-  ppg:20, rpg:15, apg:15, bpg:15, spg:10, per:10, ts:5, playoffPPG:10, rings:10,
-  mvp:8, fmvp:8, allStar:3, allNBA:5, dpoy:5
+  ppg:20, rpg:15, apg:15, bpg:15, spg:10, per:10, ts:5, playoffPPG:10,
+  rings:30, mvp:25, fmvp:20, allNBA:10, allStar:8, dpoy:7
 };
+
+function adjustGroup(groupKeys, changedKey, newVal, current) {
+  const others = groupKeys.filter(k => k !== changedKey);
+  const remaining = 100 - newVal;
+  const othersSum = others.reduce((s, k) => s + current[k], 0);
+  const next = { ...current, [changedKey]: newVal };
+  if (othersSum === 0) {
+    const base = Math.floor(remaining / others.length);
+    const extra = remaining - base * others.length;
+    others.forEach((k, i) => { next[k] = base + (i < extra ? 1 : 0); });
+  } else {
+    let assigned = 0;
+    others.forEach((k, i) => {
+      if (i === others.length - 1) {
+        next[k] = Math.max(0, remaining - assigned);
+      } else {
+        next[k] = Math.max(0, Math.round((current[k] / othersSum) * remaining));
+        assigned += next[k];
+      }
+    });
+  }
+  return next;
+}
 
 function normalize(all, key) {
   const vals = all.map(p => {
@@ -105,14 +129,14 @@ function PlayerRow({ p, rank, color, selected, onSelect, isBubble }) {
             <StatCard label="TS%" val={p.ts+"%"} />
             <StatCard label="Playoff PPG" val={p.playoffPPG} />
             <StatCard label="Games" val={p.gp} />
-            <StatCard label="Rings" val={p.rings+" 🏆"} />
           </div>
           <div style={{ fontSize:11, color:"#b57bee", fontWeight:700, textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Championships & Accolades</div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(110px, 1fr))", gap:7, marginBottom:11 }}>
+            <StatCard label="Rings" val={p.rings+" 🏆"} />
             <StatCard label="MVP Awards" val={p.mvp} />
             <StatCard label="Finals MVPs" val={p.fmvp} />
-            <StatCard label="All-Star Apps" val={p.allStar} />
             <StatCard label="All-NBA 1st Team" val={p.allNBA} />
+            <StatCard label="All-Star Apps" val={p.allStar} />
             <StatCard label="DPOY Awards" val={p.dpoy} />
           </div>
           <p style={{ fontSize:13, color:"#aab8cc", margin:0, lineHeight:1.6 }}>💡 {p.notes}</p>
@@ -123,25 +147,24 @@ function PlayerRow({ p, rank, color, selected, onSelect, isBubble }) {
 }
 
 function Slider({ label, value, variant, onChange }) {
-  const isRings = variant === "rings";
   const isAccolade = variant === "accolade";
-  const bg = isAccolade ? "#1a1a2e" : isRings ? "#1a2f1a" : "#0f1923";
-  const border = isAccolade ? "#3a2a5a" : isRings ? "#3a6a3a" : "#1e2c3d";
-  const labelColor = isAccolade ? "#b57bee" : isRings ? "#6dbf67" : "#ccd6e0";
-  const accent = isAccolade ? "#b57bee" : isRings ? "#6dbf67" : "#FFD700";
+  const bg = isAccolade ? "#1a1a2e" : "#0f1923";
+  const border = isAccolade ? "#3a2a5a" : "#1e2c3d";
+  const labelColor = isAccolade ? "#b57bee" : "#ccd6e0";
+  const accent = isAccolade ? "#b57bee" : "#FFD700";
   return (
     <div style={{ background:bg, borderRadius:8, padding:"10px 12px", border:`1px solid ${border}` }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
         <span style={{ fontSize:13, fontWeight:600, color:labelColor }}>{label}</span>
-        <span style={{ fontSize:16, fontWeight:800, color:"#FFD700", minWidth:28, textAlign:"right" }}>{value}</span>
+        <span style={{ fontSize:16, fontWeight:800, color:"#FFD700", minWidth:36, textAlign:"right" }}>{value}%</span>
       </div>
       <input
-        type="range" min={0} max={40} value={value}
+        type="range" min={0} max={100} value={value}
         onChange={e => onChange(Number(e.target.value))}
         style={{ width:"100%", accentColor:accent, cursor:"pointer" }}
       />
       <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#445566", marginTop:2 }}>
-        <span>0</span><span>20</span><span>40</span>
+        <span>0%</span><span>50%</span><span>100%</span>
       </div>
     </div>
   );
@@ -162,7 +185,8 @@ export default function App() {
   const listText = top15.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
 
   function updateWeight(k, val) {
-    setW(prev => ({ ...prev, [k]: val }));
+    const group = perfKeys.includes(k) ? perfKeys : accoladeKeys;
+    setW(prev => adjustGroup(group, k, val, prev));
     setSelected(null);
     setShowTextBox(false);
   }
@@ -171,8 +195,6 @@ export default function App() {
     setShowTextBox(true);
     setTimeout(() => { if (textareaRef.current) { textareaRef.current.focus(); textareaRef.current.select(); } }, 50);
   }
-
-  const totalWeight = Object.values(w).reduce((a,b)=>a+b,0);
 
   return (
     <div style={{ fontFamily:"'Segoe UI', sans-serif", background:"#0f1923", minHeight:"100vh", color:"#e8eaf0", padding:"20px 14px" }}>
@@ -187,7 +209,7 @@ export default function App() {
           <button onClick={() => setShowWeights(v => !v)} style={{ width:"100%", background:"none", border:"none", padding:"13px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:13, color:"#aab8cc", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>⚖️ Performance Weights</span>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:11, color:"#556677" }}>Total: {totalWeight}</span>
+              <span style={{ fontSize:11, color:"#556677" }}>= 100%</span>
               <span style={{ color:"#FFD700" }}>{showWeights ? "▲" : "▼"}</span>
             </div>
           </button>
@@ -199,7 +221,7 @@ export default function App() {
                     key={k}
                     label={statLabels[k]}
                     value={w[k]}
-                    variant={k === "rings" ? "rings" : "perf"}
+                    variant="perf"
                     onChange={val => updateWeight(k, val)}
                   />
                 ))}
@@ -212,7 +234,10 @@ export default function App() {
         <div style={{ background:"#16172a", borderRadius:12, marginBottom:20, overflow:"hidden", border:"1px solid #2a1f4a" }}>
           <button onClick={() => setShowAccolades(v => !v)} style={{ width:"100%", background:"none", border:"none", padding:"13px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:13, color:"#b57bee", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>🏆 Championships & Accolades</span>
-            <span style={{ color:"#b57bee" }}>{showAccolades ? "▲" : "▼"}</span>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:11, color:"#6a4a8a" }}>= 100%</span>
+              <span style={{ color:"#b57bee" }}>{showAccolades ? "▲" : "▼"}</span>
+            </div>
           </button>
           {showAccolades && (
             <div style={{ padding:"4px 14px 16px" }}>
